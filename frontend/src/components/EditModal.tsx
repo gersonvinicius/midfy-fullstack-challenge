@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Select, InputLabel, FormControl } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Select, InputLabel, FormControl, Box, Typography } from '@mui/material';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import api from '../services/api';
@@ -7,6 +7,7 @@ import api from '../services/api';
 const EditModal = ({
   fornecedor: fornecedorProp,
   onClose,
+  onFetchFornecedores,
 }: {
   fornecedor: {
     id: string;
@@ -16,21 +17,30 @@ const EditModal = ({
     segmentos: { id: string; nome: string }[];
   };
   onClose: () => void;
+  onFetchFornecedores: () => Promise<void>;
 }) => {
   const [fornecedor, setFornecedor] = useState(fornecedorProp);
   const [segmentosDisponiveis, setSegmentosDisponiveis] = useState<{ id: string; nome: string }[]>([]);
 
   useEffect(() => {
-    // Busca os segmentos disponíveis no Supabase
     api.get('/segmentos').then((res) => setSegmentosDisponiveis(res.data));
   }, []);
 
   const handleSubmit = async (values: any) => {
-    // Atualizar o fornecedor
     await api.patch(`/fornecedores?id=eq.${fornecedor.id}`, {
       nome: values.nome,
       logo: values.logo,
     });
+
+    // Atualizar os segmentos
+    const segmentoIds = fornecedor.segmentos.map((s) => s.id);
+    await api.delete(`/fornecedor_segmentos?fornecedor_id=eq.${fornecedor.id}`);
+    for (const segmentoId of segmentoIds) {
+      await api.post('/fornecedor_segmentos', {
+        fornecedor_id: fornecedor.id,
+        segmento_id: segmentoId,
+      });
+    }
 
     // Atualizar os CNPJs
     for (const cnpj of fornecedor.cnpjs) {
@@ -49,42 +59,12 @@ const EditModal = ({
       await api.delete(`/cnpjs?id=eq.${id}`);
     }
 
-    // Atualizar os segmentos
-    const segmentoIds = fornecedor.segmentos.map((s) => s.id);
-    await api.delete(`/fornecedor_segmentos?fornecedor_id=eq.${fornecedor.id}`);
-    for (const segmentoId of segmentoIds) {
-      await api.post('/fornecedor_segmentos', {
-        fornecedor_id: fornecedor.id,
-        segmento_id: segmentoId,
-      });
-    }
-
+    await onFetchFornecedores(); // Atualiza a lista de fornecedores
     onClose();
   };
 
-  const handleCnpjChange = (id: string, value: string) => {
-    setFornecedor((prev) => ({
-      ...prev,
-      cnpjs: prev.cnpjs.map((c) => (c.id === id ? { ...c, cnpj: value } : c)),
-    }));
-  };
-
-  const handleAddCnpj = () => {
-    setFornecedor((prev) => ({
-      ...prev,
-      cnpjs: [...prev.cnpjs, { id: `temp-${Date.now()}`, cnpj: '' }],
-    }));
-  };
-
-  const handleDeleteCnpj = (id: string) => {
-    setFornecedor((prev) => ({
-      ...prev,
-      cnpjs: prev.cnpjs.filter((c) => c.id !== id),
-    }));
-  };
-
   return (
-    <Dialog open onClose={onClose}>
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Editar Fornecedor</DialogTitle>
       <Formik
         initialValues={{ nome: fornecedor.nome, logo: fornecedor.logo }}
@@ -97,42 +77,65 @@ const EditModal = ({
         {({ values, handleChange, handleSubmit, errors }) => (
           <form onSubmit={handleSubmit}>
             <DialogContent>
-              <TextField
-                fullWidth
-                label="Nome"
-                name="nome"
-                value={values.nome}
-                onChange={handleChange}
-                error={!!errors.nome}
-                helperText={errors.nome}
-              />
-              <TextField
-                fullWidth
-                label="Logo (URL)"
-                name="logo"
-                value={values.logo}
-                onChange={handleChange}
-                error={!!errors.logo}
-                helperText={errors.logo}
-              />
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Typography variant="h6">Informações Gerais</Typography>
+                <TextField
+                  fullWidth
+                  label="Nome"
+                  name="nome"
+                  value={values.nome}
+                  onChange={handleChange}
+                  error={!!errors.nome}
+                  helperText={errors.nome}
+                />
+                <TextField
+                  fullWidth
+                  label="Logo (URL)"
+                  name="logo"
+                  value={values.logo}
+                  onChange={handleChange}
+                  error={!!errors.logo}
+                  helperText={errors.logo}
+                />
 
-              <div>
-                <h4>CNPJs</h4>
+                <Typography variant="h6">CNPJs</Typography>
                 {fornecedor.cnpjs.map((cnpj) => (
-                  <div key={cnpj.id}>
+                  <Box key={cnpj.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <TextField
                       fullWidth
                       value={cnpj.cnpj}
-                      onChange={(e) => handleCnpjChange(cnpj.id, e.target.value)}
+                      onChange={(e) => setFornecedor((prev) => ({
+                        ...prev,
+                        cnpjs: prev.cnpjs.map((c) => (c.id === cnpj.id ? { ...c, cnpj: e.target.value } : c)),
+                      }))}
                     />
-                    <Button onClick={() => handleDeleteCnpj(cnpj.id)}>Excluir</Button>
-                  </div>
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      onClick={() => setFornecedor((prev) => ({
+                        ...prev,
+                        cnpjs: prev.cnpjs.filter((c) => c.id !== cnpj.id),
+                      }))}
+                    >
+                      Remover
+                    </Button>
+                  </Box>
                 ))}
-                <Button onClick={handleAddCnpj}>Adicionar CNPJ</Button>
-              </div>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={() =>
+                    setFornecedor((prev) => ({
+                      ...prev,
+                      cnpjs: [...prev.cnpjs, { id: `temp-${Date.now()}`, cnpj: '' }],
+                    }))
+                  }
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  Adicionar CNPJ
+                </Button>
 
-              <div>
-                <h4>Segmentos</h4>
+                <Typography variant="h6">Segmentos</Typography>
                 <FormControl fullWidth>
                   <InputLabel>Segmentos</InputLabel>
                   <Select
@@ -153,11 +156,15 @@ const EditModal = ({
                     ))}
                   </Select>
                 </FormControl>
-              </div>
+              </Box>
             </DialogContent>
             <DialogActions>
-              <Button onClick={onClose}>Cancelar</Button>
-              <Button type="submit">Salvar</Button>
+              <Button onClick={onClose} color="secondary">
+                Cancelar
+              </Button>
+              <Button type="submit" variant="contained" color="primary">
+                Salvar
+              </Button>
             </DialogActions>
           </form>
         )}
