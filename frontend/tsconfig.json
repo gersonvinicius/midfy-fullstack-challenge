@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2020",                       // Compatível com Node.js 14+ e moderno
+    "module": "esnext",                       // tsup pode gerar "commonjs" ou "esm" conforme necessário
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,                // Permite importar JSON
+    "isolatedModules": true,                  // Importante para ferramentas como tsup e SWC
+    "outDir": "dist",                         // Diretório de saída
+    "declaration": true,                      // Gera arquivos .d.ts (útil para libs)
+    "declarationDir": "dist/types",
+    "sourceMap": true                         // Gera .map para debugging
+  },
+  "include": ["src"],                         // Inclui arquivos da pasta src
+  "exclude": ["node_modules", "dist"]
+}
